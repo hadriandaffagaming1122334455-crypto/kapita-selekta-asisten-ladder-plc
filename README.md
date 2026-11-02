@@ -1,36 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ladder Tutor — Asisten Draf Ladder PLC Omron CP1E
 
-## Getting Started
+Website untuk membantu mahasiswa Teknik Elektro memahami dan menyusun diagram ladder PLC.
+Proyek UTS Kapita Selekta: AI Engineering (Ganjil 2026/2027).
 
-First, run the development server:
+## Status
+- [x] Parser mnemonic (`lib/parser.ts`)
+- [x] Validator alamat dan sintaks (`lib/validator.ts`)
+- [x] Simulator scan dengan self-holding dan TIM (`lib/simulator.ts`)
+- [x] Halaman awal: editor, pemeriksaan, simulator (`app/page.tsx`)
+- [ ] Prompt v2 dan endpoint AI
+- [ ] RAG dari 5 manual Omron
+- [ ] Gambar ladder SVG, mode latihan
+- [ ] Uji di CX-Programmer
 
+## Menjalankan
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # buka http://localhost:3000
+npx tsx lib/test.ts  # uji logika inti
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Batasan saat ini
+- Rentang alamat di `lib/config.ts` perlu dicocokkan dengan manual W479/W480 untuk model CP1E yang dipakai.
+- Simulator belum mendukung CNT, ANDLD, dan ORLD.
+- Hasil simulator bukan pengganti uji di CX-Programmer.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Sumber
+Manual Omron (W446, W461, W483, W479, W480): lihat tautan di dokumen rancangan. File manual tidak disertakan di repo ini.

@@ -1,69 +1,118 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { parseProgram } from "@/lib/parser";
+import { validate } from "@/lib/validator";
+import { initialState, step, type SimState } from "@/lib/simulator";
+import { EXAMPLES } from "@/lib/examples";
+
+const INPUTS = ["0.00", "0.01", "0.02", "0.03"];
+const OUTPUTS = ["100.00", "100.01", "100.02", "100.03"];
 
 export default function Home() {
+  const [text, setText] = useState(EXAMPLES[0].program);
+  const [inputs, setInputs] = useState<Record<string, boolean>>({});
+  const [state, setState] = useState<SimState>(initialState());
+  const [running, setRunning] = useState(false);
+
+  const { program, errors } = useMemo(() => parseProgram(text), [text]);
+  const result = useMemo(() => validate(program), [program]);
+  const canRun = errors.length === 0 && result.valid;
+
+  // ref supaya interval selalu membaca input terbaru
+  const inputsRef = useRef(inputs);
+  inputsRef.current = inputs;
+
+  useEffect(() => {
+    if (!running || !canRun) return;
+    const id = setInterval(() => {
+      setState((s) => step(program, s, inputsRef.current, 100));
+    }, 100);
+    return () => clearInterval(id);
+  }, [running, canRun, program]);
+
+  const reset = () => { setRunning(false); setState(initialState()); };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="mx-auto max-w-5xl p-6 space-y-6">
+      <header>
+        <h1 className="text-2xl font-bold">Ladder Tutor — Omron CP1E</h1>
+        <p className="text-sm text-gray-500">
+          Tulis program ladder dalam mnemonic, periksa, lalu simulasikan. Selalu uji ulang di CX-Programmer.
+        </p>
+      </header>
+
+      <section className="grid gap-6 md:grid-cols-2">
+        <div className="space-y-2">
+          <h2 className="font-semibold">1. Program (mnemonic)</h2>
+          <textarea
+            className="w-full h-72 rounded border p-3 font-mono text-sm"
+            value={text}
+            onChange={(e) => { setText(e.target.value); reset(); }}
+          />
+          <p className="text-xs text-gray-500">{EXAMPLES[0].description}</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        <div className="space-y-2">
+          <h2 className="font-semibold">2. Hasil pemeriksaan</h2>
+          <div className={`rounded border p-3 text-sm ${canRun ? "border-green-500" : "border-red-500"}`}>
+            <p className="font-medium">{canRun ? "VALID — siap disimulasikan" : "PERLU DIPERBAIKI"}</p>
+            <ul className="mt-2 list-disc pl-5 space-y-1">
+              {errors.map((e, i) => <li key={"p" + i} className="text-red-600">{e}</li>)}
+              {result.issues.map((i, k) => (
+                <li key={k} className={i.severity === "error" ? "text-red-600" : "text-amber-600"}>
+                  {i.rung ? `Rung ${i.rung}: ` : ""}{i.message}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
-      </main>
-    </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="font-semibold">3. Simulator</h2>
+        <div className="flex gap-2">
+          <button className="rounded bg-blue-600 px-3 py-1 text-white disabled:opacity-40"
+            disabled={!canRun} onClick={() => setRunning((r) => !r)}>
+            {running ? "Jeda" : "Jalankan"}
+          </button>
+          <button className="rounded border px-3 py-1" onClick={reset}>Reset</button>
+          <span className="self-center text-xs text-gray-500">Scan ke-{state.scan} (100 ms/scan)</span>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-2">
+          <div>
+            <p className="text-sm font-medium mb-1">Input (tahan untuk menekan)</p>
+            <div className="flex flex-wrap gap-2">
+              {INPUTS.map((a) => (
+                <button key={a}
+                  className={`rounded border px-3 py-2 text-sm font-mono ${inputs[a] ? "bg-blue-600 text-white" : ""}`}
+                  onPointerDown={() => setInputs((p) => ({ ...p, [a]: true }))}
+                  onPointerUp={() => setInputs((p) => ({ ...p, [a]: false }))}
+                  onPointerLeave={() => setInputs((p) => ({ ...p, [a]: false }))}>
+                  {a}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium mb-1">Output</p>
+            <div className="flex flex-wrap gap-3">
+              {OUTPUTS.map((a) => (
+                <div key={a} className="text-center text-xs font-mono">
+                  <div className={`mx-auto h-8 w-8 rounded-full border ${state.bits[a] ? "bg-yellow-400" : "bg-gray-200"}`} />
+                  {a}
+                </div>
+              ))}
+            </div>
+            {Object.entries(state.timers).map(([k, t]) => (
+              <p key={k} className="mt-2 text-xs font-mono">
+                {k}: {(t.elapsedMs / 1000).toFixed(1)} s {t.done ? "(selesai)" : ""}
+              </p>
+            ))}
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }
