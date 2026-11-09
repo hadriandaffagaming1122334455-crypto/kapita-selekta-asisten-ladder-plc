@@ -51,6 +51,8 @@ t2 = step(ex2.program, t2, { "0.01": true });
 ok(t2.bits["100.00"] === true && !t2.bits["100.01"], "RESET: L1 nyala, L2 mati");
 
 import { layoutProgram } from "./layout";
+ok(ex2.program[0].instructions[0].label === "START", "komentar akhir baris menjadi nama simbol");
+ok(ex2.program[3].instructions[1].label === "L1 Lampu sistem tidak berjalan", "label coil terbaca");
 const lay = layoutProgram(ex2.program);
 ok(lay.shapes.filter((x) => x.k === "contact").length === 8, "layout: 8 kontak tergambar");
 ok(lay.shapes.filter((x) => x.k === "tim").length === 1 && lay.shapes.filter((x) => x.k === "coil").length === 4, "layout: 1 TIM dan 4 coil");

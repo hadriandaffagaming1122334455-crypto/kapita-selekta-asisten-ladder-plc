@@ -1,20 +1,17 @@
 @import "tailwindcss";
 
-/* Tema terang yang disengaja (tidak mengikuti mode gelap sistem) */
-:root {
-  color-scheme: light;
-  --ink: #14213d;
-  --page: #eef3fa;
-}
+/* Tema terang bergaya aplikasi desktop teknik (mengikuti CX-Programmer) */
+:root { color-scheme: light; }
 
 body {
-  background: var(--page);
-  color: var(--ink);
-  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  background: #e5e7eb;
+  color: #111827;
+  font-family: "Segoe UI", Tahoma, system-ui, sans-serif;
+  font-size: 13px;
 }
 
-textarea, select, button { font: inherit; }
+button, select, textarea { font: inherit; }
 button:focus-visible, textarea:focus-visible, select:focus-visible {
-  outline: 3px solid #93c5fd;
-  outline-offset: 2px;
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
 }

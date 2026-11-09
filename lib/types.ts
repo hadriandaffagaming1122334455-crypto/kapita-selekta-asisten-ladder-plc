@@ -5,6 +5,7 @@ export type Op = "LD" | "LD NOT" | "AND" | "AND NOT" | "OR" | "OR NOT" | "OUT" |
 export interface Instruction {
   op: Op;
   arg: string; // alamat, contoh "0.00", "100.00", "W0.00", "T0000" (kontak), "0000" (nomor TIM)
+  label?: string; // nama simbol/komentar dari "// ..." di akhir baris
   preset?: number; // hanya TIM/CNT: satuan 0.1 detik untuk TIM (#0050 = 5 detik)
 }
 

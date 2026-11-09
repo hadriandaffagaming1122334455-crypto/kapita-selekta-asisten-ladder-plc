@@ -26,7 +26,9 @@ export function parseProgram(text: string): { program: Program; errors: string[]
   };
 
   text.split(/\r?\n/).forEach((raw, i) => {
-    const line = raw.replace(/\/\/.*$/, "").trim().toUpperCase();
+    const cut = raw.indexOf("//");
+    const line = (cut >= 0 ? raw.slice(0, cut) : raw).trim().toUpperCase();
+    const label = cut >= 0 ? raw.slice(cut + 2).trim() : "";
     if (line === "") return flush();
 
     const op = OPS.find((o) => line === o || line.startsWith(o + " "));
@@ -40,6 +42,7 @@ export function parseProgram(text: string): { program: Program; errors: string[]
       return;
     }
     const ins: Instruction = { op, arg: rest[0] };
+    if (label) ins.label = label;
     if (op === "TIM" || op === "CNT") {
       const m = /^#(\d{1,4})$/.exec(rest[1] ?? "");
       if (!m) {

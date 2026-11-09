@@ -3,14 +3,15 @@ import type { Instruction, Program } from "./types";
 export type Shape =
   | { k: "line"; x1: number; y1: number; x2: number; y2: number }
   | { k: "text"; x: number; y: number; s: string; anchor?: "start" | "middle" }
-  | { k: "contact"; x: number; y: number; addr: string; nc: boolean }
+  | { k: "contact"; x: number; y: number; addr: string; nc: boolean; label?: string }
+  | { k: "note"; x: number; y: number; s: string }
   | { k: "coil"; x: number; y: number; addr: string }
   | { k: "tim"; x: number; y: number; no: string; preset: number };
 
-type Node = { t: "c"; addr: string; nc: boolean } | { t: "s" | "p"; kids: Node[] };
+type Node = { t: "c"; addr: string; nc: boolean; label?: string } | { t: "s" | "p"; kids: Node[] };
 
 const CW = 80; // lebar kontak
-const RH = 50; // tinggi satu baris
+export const RH = 60; // tinggi satu baris
 
 const join = (t: "s" | "p", a: Node, b: Node): Node => ({
   t,
@@ -28,7 +29,7 @@ function size(n: Node): { w: number; h: number } {
 function draw(n: Node, x: number, y: number, w: number, out: Shape[]) {
   const mid = y + RH / 2;
   const line = (x1: number, y1: number, x2: number, y2: number) => out.push({ k: "line", x1, y1, x2, y2 });
-  if (n.t === "c") return void out.push({ k: "contact", x, y, addr: n.addr, nc: n.nc });
+  if (n.t === "c") return void out.push({ k: "contact", x, y, addr: n.addr, nc: n.nc, label: n.label });
   if (n.t === "s") {
     let cx = x;
     for (const kid of n.kids) {
@@ -59,7 +60,7 @@ export function buildCondition(ins: Instruction[]): { cond: Node | null; out: In
   const body = hasOut ? ins.slice(0, -1) : ins;
   let cond: Node | null = null;
   for (const i of body) {
-    const c: Node = { t: "c", addr: i.arg, nc: i.op.endsWith("NOT") };
+    const c: Node = { t: "c", addr: i.arg, nc: i.op.endsWith("NOT"), label: i.label };
     if (!cond) cond = c;
     else cond = join(i.op.startsWith("OR") ? "p" : "s", cond, c);
   }
@@ -87,13 +88,15 @@ export function layoutProgram(program: Program): { shapes: Shape[]; width: numbe
       shapes.push({ k: "coil", x: OUTX + 30, y: mid, addr: b.out.arg });
       line(OUTX, mid, OUTX + 18, mid);
       line(OUTX + 42, mid, RIGHT, mid);
+      if (b.out.label) shapes.push({ k: "note", x: RIGHT + 12, y: mid + 4, s: b.out.label });
     } else if (b.out) {
       shapes.push({ k: "tim", x: OUTX, y: mid - 18, no: b.out.arg, preset: b.out.preset ?? 0 });
       line(OUTX + 100, mid, RIGHT, mid);
+      if (b.out.label) shapes.push({ k: "note", x: RIGHT + 12, y: mid + 4, s: b.out.label });
     }
     y += Math.max(sz.h, 70) + 20;
   }
   line(LEFT, 10, LEFT, y - 10);
   line(RIGHT, 10, RIGHT, y - 10);
-  return { shapes, width: RIGHT + 20, height: y };
+  return { shapes, width: RIGHT + 240, height: y };
 }
