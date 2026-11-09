@@ -16,11 +16,13 @@ function isOutput(a: string): boolean {
   return C.outputWords.includes(w) && b < C.outputBitsPerWord;
 }
 function isWork(a: string): boolean {
-  const m = /^W(\d{1,3})\.(\d{2})$/.exec(a);
-  return !!m && +m[1] <= C.workMaxWord && +m[2] <= 15;
+  const w = /^W(\d{1,3})\.(\d{2})$/.exec(a);
+  if (w) return +w[1] <= C.workMaxWord && +w[2] <= 15;
+  const c = /^(\d{1,3})\.(\d{2})$/.exec(a); // bit kerja CIO, mis. 10.00
+  return !!c && +c[1] >= C.cioWorkMin && +c[1] <= C.cioWorkMax && +c[2] <= 15;
 }
 function isTimerContact(a: string): boolean {
-  const m = /^T(\d{4})$/.exec(a);
+  const m = /^T(\d{1,4})$/.exec(a);
   return !!m && +m[1] <= C.maxTimerNo;
 }
 
@@ -60,9 +62,9 @@ export function validate(program: Program): ValidationResult {
         outCount.set(x.arg, (outCount.get(x.arg) ?? 0) + 1);
         if (idx !== ins.length - 1) add("error", rung.no, "OUT harus instruksi terakhir di rung.");
       } else if (x.op === "TIM" || x.op === "CNT") {
-        const n = /^\d{4}$/.test(x.arg) ? +x.arg : NaN;
+        const n = /^\d{1,4}$/.test(x.arg) ? +x.arg : NaN;
         if (Number.isNaN(n) || n > C.maxTimerNo)
-          add("error", rung.no, `Nomor ${x.op} "${x.arg}" tidak valid (0000-${String(C.maxTimerNo).padStart(4, "0")}).`);
+          add("error", rung.no, `Nomor ${x.op} "${x.arg}" tidak valid (0-${C.maxTimerNo}).`);
         if (x.preset === undefined || x.preset > 9999)
           add("error", rung.no, `Nilai set ${x.op} harus #0000-#9999.`);
         timerNos.set(x.arg, (timerNos.get(x.arg) ?? 0) + 1);

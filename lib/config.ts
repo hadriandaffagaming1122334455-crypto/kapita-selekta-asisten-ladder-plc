@@ -1,12 +1,12 @@
-// Rentang alamat. ANGKA INI HARUS DICOCOKKAN dengan manual W480/W479
-// untuk tipe CP1E yang kamu pakai (jumlah I/O beda tiap model).
-// Mengubah angka di sini cukup; validator dan simulator mengikuti.
-
+// Rentang alamat. COCOKKAN dengan manual W479/W480 untuk model CP1E yang dipakai.
+// Disesuaikan dari program CX-Programmer: 0.00, 10.00 (CIO work), W1.01, 100.12, T010.
 export const ADDRESS_CONFIG = {
-  inputWords: [0, 1], // 0.00-0.11, 1.00-1.11 (isi sesuai model)
-  inputBitsPerWord: 12,
-  outputWords: [100, 101], // 100.00-100.07, dst
-  outputBitsPerWord: 8,
-  workMaxWord: 99, // W0.00 - W99.15 (verifikasi di manual)
-  maxTimerNo: 255, // T0000 - T0255 (timer & counter berbagi nomor)
+  inputWords: [0, 1],
+  inputBitsPerWord: 16,
+  outputWords: [100, 101],
+  outputBitsPerWord: 16,
+  cioWorkMin: 2, // CIO 2.00 - 99.15 dianggap bit kerja (mis. 10.00 "Holding")
+  cioWorkMax: 99,
+  workMaxWord: 99, // W0.00 - W99.15
+  maxTimerNo: 255,
 };

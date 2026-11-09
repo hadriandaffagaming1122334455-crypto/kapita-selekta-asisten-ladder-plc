@@ -28,8 +28,9 @@ export function step(
   const timers: SimState["timers"] = {};
   for (const [k, v] of Object.entries(prev.timers)) timers[k] = { ...v };
 
+  const tk = (a: string) => "T" + parseInt(a.replace(/^T/, ""), 10); // T010 == T10
   const read = (addr: string): boolean =>
-    /^T\d{4}$/.test(addr) ? timers[addr]?.done ?? false : bits[addr] ?? false;
+    /^T\d+$/.test(addr) ? timers[tk(addr)]?.done ?? false : bits[addr] ?? false;
 
   for (const rung of program) {
     let acc = false;
@@ -43,7 +44,7 @@ export function step(
         case "OR NOT": acc = acc || !read(ins.arg); break;
         case "OUT": bits[ins.arg] = acc; break;
         case "TIM": {
-          const key = `T${ins.arg}`;
+          const key = tk(ins.arg);
           const t = timers[key] ?? { elapsedMs: 0, done: false };
           if (acc) {
             t.elapsedMs += dtMs;
