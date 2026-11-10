@@ -1,6 +1,6 @@
 import type { Instruction, Op, Program, Rung } from "./types";
 
-const OPS: Op[] = ["LD NOT", "AND NOT", "OR NOT", "LD", "AND", "OR", "OUT", "TIM", "CNT"];
+const OPS: Op[] = ["LD NOT", "AND NOT", "OR NOT", "ANDLD", "ORLD", "LD", "AND", "OR", "OUT", "TIM", "CNT"];
 
 /**
  * Format teks (satu instruksi per baris, baris kosong atau "// rung" memisahkan rung):
@@ -37,6 +37,14 @@ export function parseProgram(text: string): { program: Program; errors: string[]
       return;
     }
     const rest = line.slice(op.length).trim().split(/\s+/).filter(Boolean);
+    if (op === "ANDLD" || op === "ORLD") {
+      // Penggabung blok: tidak punya alamat.
+      if (rest.length > 0) errors.push(`Baris ${i + 1}: ${op} tidak memakai alamat`);
+      const blk: Instruction = { op, arg: "" };
+      if (label) blk.label = label;
+      current.push(blk);
+      return;
+    }
     if (rest.length === 0) {
       errors.push(`Baris ${i + 1}: ${op} butuh alamat`);
       return;

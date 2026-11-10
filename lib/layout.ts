@@ -6,7 +6,7 @@ export type Shape =
   | { k: "contact"; x: number; y: number; addr: string; nc: boolean; label?: string }
   | { k: "note"; x: number; y: number; s: string }
   | { k: "coil"; x: number; y: number; addr: string }
-  | { k: "tim"; x: number; y: number; no: string; preset: number };
+  | { k: "tim"; x: number; y: number; no: string; preset: number; kind: "TIM" | "CNT"; h: number };
 
 type Node = { t: "c"; addr: string; nc: boolean; label?: string } | { t: "s" | "p"; kids: Node[] };
 
@@ -53,48 +53,74 @@ function draw(n: Node, x: number, y: number, w: number, out: Shape[]) {
   line(x + w, mids[0], x + w, mids[mids.length - 1]);
 }
 
-/** Model akumulator linier: AND = seri, OR = paralel dengan seluruh kondisi sejak LD. */
-export function buildCondition(ins: Instruction[]): { cond: Node | null; out: Instruction | null } {
+/**
+ * Model tumpukan blok: AND = seri, OR = paralel dengan blok saat ini, LD memulai blok baru,
+ * ANDLD/ORLD menggabungkan blok saat ini dengan blok di tumpukan. Untuk CNT, blok saat ini
+ * adalah input reset dan blok di tumpukan adalah input hitung.
+ */
+export function buildCondition(ins: Instruction[]): { cond: Node | null; reset: Node | null; out: Instruction | null } {
   const last = ins[ins.length - 1];
   const hasOut = !!last && ["OUT", "TIM", "CNT"].includes(last.op);
   const body = hasOut ? ins.slice(0, -1) : ins;
-  let cond: Node | null = null;
+  const stack: Node[] = [];
+  let cur: Node | null = null;
   for (const i of body) {
+    if (i.op === "ANDLD" || i.op === "ORLD") {
+      const a = stack.pop();
+      if (a && cur) cur = join(i.op === "ANDLD" ? "s" : "p", a, cur);
+      continue;
+    }
     const c: Node = { t: "c", addr: i.arg, nc: i.op.endsWith("NOT"), label: i.label };
-    if (!cond) cond = c;
-    else cond = join(i.op.startsWith("OR") ? "p" : "s", cond, c);
+    if (i.op === "LD" || i.op === "LD NOT") {
+      if (cur) stack.push(cur);
+      cur = c;
+    } else if (!cur) cur = c;
+    else cur = join(i.op.startsWith("OR") ? "p" : "s", cur, c);
   }
-  return { cond, out: hasOut ? last : null };
+  if (hasOut && last.op === "CNT") return { cond: stack.pop() ?? null, reset: cur, out: last };
+  return { cond: cur, reset: null, out: hasOut ? last : null };
 }
 
 export function layoutProgram(program: Program): { shapes: Shape[]; width: number; height: number } {
   const shapes: Shape[] = [];
   const rungs = program.map((r) => {
     const b = buildCondition(r.instructions);
-    return { r, b, sz: b.cond ? size(b.cond) : { w: 0, h: RH } };
+    const rs = b.reset ? size(b.reset) : null;
+    return { r, b, rs, sz: b.cond ? size(b.cond) : { w: 0, h: RH } };
   });
-  const maxW = Math.max(CW, ...rungs.map((x) => x.sz.w));
+  const maxW = Math.max(CW, ...rungs.map((x) => Math.max(x.sz.w, x.rs?.w ?? 0)));
   const LEFT = 40;
   const OUTX = LEFT + maxW + 30;
   const RIGHT = OUTX + 130;
   const line = (x1: number, y1: number, x2: number, y2: number) => shapes.push({ k: "line", x1, y1, x2, y2 });
   let y = 10;
-  for (const { r, b, sz } of rungs) {
+  for (const { r, b, rs, sz } of rungs) {
     const mid = y + RH / 2;
+    const countH = Math.max(sz.h, RH);
     shapes.push({ k: "text", x: 4, y: mid + 4, s: String(r.no - 1) });
     if (b.cond) draw(b.cond, LEFT, y, sz.w, shapes);
     line(LEFT + sz.w, mid, OUTX, mid);
+    if (b.reset && rs) {
+      // Baris kedua untuk input reset CNT, masuk ke kotak CNT di sisi bawah.
+      const y2 = y + countH;
+      draw(b.reset, LEFT, y2, rs.w, shapes);
+      line(LEFT + rs.w, y2 + RH / 2, OUTX, y2 + RH / 2);
+    }
     if (b.out?.op === "OUT") {
       shapes.push({ k: "coil", x: OUTX + 30, y: mid, addr: b.out.arg });
       line(OUTX, mid, OUTX + 18, mid);
       line(OUTX + 42, mid, RIGHT, mid);
       if (b.out.label) shapes.push({ k: "note", x: RIGHT + 12, y: mid + 4, s: b.out.label });
     } else if (b.out) {
-      shapes.push({ k: "tim", x: OUTX, y: mid - 18, no: b.out.arg, preset: b.out.preset ?? 0 });
+      const isCnt = b.out.op === "CNT";
+      shapes.push({
+        k: "tim", x: OUTX, y: mid - 18, no: b.out.arg, preset: b.out.preset ?? 0,
+        kind: isCnt ? "CNT" : "TIM", h: isCnt ? countH + 36 : 60,
+      });
       line(OUTX + 100, mid, RIGHT, mid);
       if (b.out.label) shapes.push({ k: "note", x: RIGHT + 12, y: mid + 4, s: b.out.label });
     }
-    y += Math.max(sz.h, 70) + 20;
+    y += Math.max(sz.h + (rs ? rs.h : 0), 70) + 20;
   }
   line(LEFT, 10, LEFT, y - 10);
   line(RIGHT, 10, RIGHT, y - 10);

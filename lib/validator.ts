@@ -25,6 +25,10 @@ function isTimerContact(a: string): boolean {
   const m = /^T(\d{1,4})$/.exec(a);
   return !!m && +m[1] <= C.maxTimerNo;
 }
+function isCounterContact(a: string): boolean {
+  const m = /^C(\d{1,4})$/.exec(a);
+  return !!m && +m[1] <= C.maxTimerNo;
+}
 
 export function validate(program: Program): ValidationResult {
   const issues: Issue[] = [];
@@ -50,13 +54,30 @@ export function validate(program: Program): ValidationResult {
     if (last && !["OUT", "TIM", "CNT"].includes(last.op))
       add("error", rung.no, "Rung harus diakhiri OUT, TIM, atau CNT.");
 
+    // Kedalaman tumpukan blok: tiap LD menambah satu blok, ANDLD/ORLD menggabungkan dua blok jadi satu.
+    let depth = 0;
+
     ins.forEach((x, idx) => {
+      if (x.op === "ANDLD" || x.op === "ORLD") {
+        if (depth < 2) add("error", rung.no, `${x.op} butuh dua blok (dua LD sebelumnya) untuk digabung.`);
+        else depth -= 1;
+        return;
+      }
       if (CONTACT_OPS.includes(x.op)) {
-        if (idx > 0 && (x.op === "LD" || x.op === "LD NOT"))
-          add("warning", rung.no, `${x.op} di tengah rung memerlukan ANDLD/ORLD (belum didukung). Pisahkan ke rung lain.`);
-        if (!(isInput(x.arg) || isOutput(x.arg) || isWork(x.arg) || isTimerContact(x.arg)))
+        if (x.op === "LD" || x.op === "LD NOT") depth += 1;
+        if (!(isInput(x.arg) || isOutput(x.arg) || isWork(x.arg) || isTimerContact(x.arg) || isCounterContact(x.arg)))
           add("error", rung.no, `Alamat kontak "${x.arg}" tidak valid untuk konfigurasi ini.`);
-      } else if (x.op === "OUT") {
+        return;
+      }
+      if (x.op === "OUT" || x.op === "TIM") {
+        if (depth > 1) add("error", rung.no, `Ada ${depth} blok yang belum digabung sebelum ${x.op}: gunakan ANDLD atau ORLD.`);
+      }
+      if (x.op === "CNT") {
+        if (depth !== 2)
+          add("error", rung.no, "CNT butuh tepat dua kondisi: LD input hitung, lalu LD input reset (masing-masing boleh berisi AND/OR).");
+        depth = 0;
+      }
+      if (x.op === "OUT") {
         if (!(isOutput(x.arg) || isWork(x.arg)))
           add("error", rung.no, `OUT ke "${x.arg}" tidak valid (harus output atau work bit).`);
         outCount.set(x.arg, (outCount.get(x.arg) ?? 0) + 1);
@@ -68,13 +89,14 @@ export function validate(program: Program): ValidationResult {
         if (x.preset === undefined || x.preset > 9999)
           add("error", rung.no, `Nilai set ${x.op} harus #0000-#9999.`);
         timerNos.set(x.arg, (timerNos.get(x.arg) ?? 0) + 1);
-        if (x.op === "CNT") add("warning", rung.no, "CNT belum didukung simulator.");
       }
     });
   }
 
   for (const [addr, n] of outCount)
     if (n > 1) add("error", undefined, `OUT ganda ke ${addr} (${n} kali). Satu alamat hanya boleh di-OUT sekali.`);
+  // Asumsi: TIM dan CNT berbagi satu ruang nomor (0-255), jadi nomor yang sama tidak boleh dipakai keduanya.
+  // COCOKKAN dengan manual W483/W480 untuk CP1E.
   for (const [no, n] of timerNos)
     if (n > 1) add("error", undefined, `Nomor timer/counter ${no} dipakai ${n} kali.`);
 

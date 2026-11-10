@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const systemPrompt = await readFile(path.join(process.cwd(), "prompts", "v2.md"), "utf8");
+    const systemPrompt = await readFile(path.join(process.cwd(), "prompts", "v3.md"), "utf8");
     const hasil = await runDraft({ deskripsi, mode, systemPrompt, chat });
     return Response.json(hasil, { status: hasil.ok ? 200 : 422 });
   } catch {

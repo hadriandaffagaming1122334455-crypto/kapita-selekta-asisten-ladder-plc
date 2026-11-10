@@ -19,6 +19,18 @@ Alasan tiap bagian:
 
 Perbandingan v1 vs v2: (isi setelah kamu menjalankan 10 masukan yang sama pada v1 dan v2, catat mana yang lebih baik dan mengapa)
 
+## v3
+Perubahan dari v2: simulator dan validator sekarang mendukung CNT, ANDLD, dan ORLD, jadi daftar instruksi di prompt diperluas dan aturan 3 (tidak_bisa) tidak lagi menolak ketiganya. `app/api/draft/route.ts` memakai v3. v2 tetap disimpan sebagai riwayat.
+
+| Perubahan | Alasan |
+|---|---|
+| Tambah ANDLD, ORLD, CNT dan penjelasan blok | Prompt harus selaras dengan kemampuan `lib/validator.ts` dan `lib/simulator.ts`. Kalau prompt melarang sesuatu yang sudah didukung, model menolak permintaan yang sebenarnya bisa dikerjakan. |
+| Aturan "semua blok digabung sebelum OUT/TIM" | Ini yang diperiksa validator. Menyebutnya di prompt mengurangi draf yang ditolak validator. |
+| CNT: dua kondisi (hitung, lalu reset) | Format ini yang dibaca parser dan simulator. |
+| Nomor TIM dan CNT tidak boleh sama | Aturan validator. Asumsinya masih harus dicocokkan dengan manual W483/W480. |
+
+Hipotesis yang perlu diuji dengan model sungguhan: model mungkin lupa menggabungkan blok dengan ANDLD/ORLD, atau salah urutan input hitung dan reset pada CNT. Catat hasilnya di bagian titik lemah di bawah.
+
 ## Batas akses tool
 `periksa_program`: fungsi murni di `lib/tools.ts`. Hanya membaca teks yang dikirim model. Tidak membaca berkas, tidak memakai jaringan, tidak membaca variabel lingkungan.
 

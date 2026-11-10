@@ -14,7 +14,9 @@ export default function LadderDiagram({ program, state }: { program: Program; st
   const val = (a: string): boolean =>
     /^T\d+$/.test(a)
       ? state.timers["T" + parseInt(a.slice(1), 10)]?.done ?? false
-      : state.bits[a] ?? false;
+      : /^C\d+$/.test(a)
+        ? state.counters?.["C" + parseInt(a.slice(1), 10)]?.done ?? false
+        : state.bits[a] ?? false;
   const half = RH / 2;
 
   return (
@@ -49,6 +51,20 @@ export default function LadderDiagram({ program, state }: { program: Program; st
               <g key={i}>
                 <circle cx={s.x} cy={s.y} r="12" fill={on ? "#86EFAC" : "#FFFFFF"} stroke={on ? GREEN : BLACK} strokeWidth="2" />
                 <text x={s.x} y={s.y - 20} fill={BLACK} textAnchor="middle">{s.addr}</text>
+              </g>
+            );
+          }
+          if (s.kind === "CNT") {
+            const c = state.counters?.["C" + parseInt(s.no, 10)];
+            const done = c?.done ?? false;
+            return (
+              <g key={i}>
+                <rect x={s.x} y={s.y} width="100" height={s.h} fill="#FFFFFF" stroke={done ? GREEN : BLACK} strokeWidth="2" />
+                <text x={s.x + 50} y={s.y + 19} fill={BLACK} textAnchor="middle">CNT {s.no}</text>
+                <text x={s.x + 50} y={s.y + 35} fill={BLACK} textAnchor="middle">#{s.preset}</text>
+                <text x={s.x + 50} y={s.y + 51} fill={done ? GREEN : "#555"} textAnchor="middle">PV {c?.pv ?? s.preset}</text>
+                <text x={s.x + 6} y={s.y + 14} fill="#555" fontSize="10">CP</text>
+                <text x={s.x + 6} y={s.y + s.h - 6} fill="#555" fontSize="10">R</text>
               </g>
             );
           }

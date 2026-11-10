@@ -6,7 +6,7 @@ Proyek UTS Kapita Selekta: AI Engineering (Ganjil 2026/2027).
 ## Status
 - [x] Parser mnemonic (`lib/parser.ts`)
 - [x] Validator alamat dan sintaks (`lib/validator.ts`)
-- [x] Simulator scan dengan self-holding dan TIM (`lib/simulator.ts`)
+- [x] Simulator scan dengan self-holding, TIM, CNT, ANDLD, dan ORLD (`lib/simulator.ts`)
 - [x] Halaman awal: editor, pemeriksaan, simulator (`app/page.tsx`)
 - [ ] Prompt v2 dan endpoint AI
 - [ ] RAG dari 5 manual Omron
@@ -17,12 +17,14 @@ Proyek UTS Kapita Selekta: AI Engineering (Ganjil 2026/2027).
 ```bash
 npm install
 npm run dev        # buka http://localhost:3000
-npx tsx lib/test.ts  # uji logika inti
+npx tsx lib/test.ts       # uji logika inti
+npx tsx lib/test-blok.ts  # uji CNT, ANDLD, ORLD
+npx tsx lib/test-ai.ts    # uji alur AI dengan model tiruan (tanpa kunci)
 ```
 
 ## Batasan saat ini
 - Rentang alamat di `lib/config.ts` perlu dicocokkan dengan manual W479/W480 untuk model CP1E yang dipakai.
-- Simulator belum mendukung CNT, ANDLD, dan ORLD.
+- Perilaku CNT di simulator (turun dari nilai set pada tepi naik, flag bertahan sampai reset) dan aturan nomor TIM/CNT berbagi satu ruang perlu dicocokkan dengan manual W483/W480.
 - Hasil simulator bukan pengganti uji di CX-Programmer.
 
 ## Sumber
