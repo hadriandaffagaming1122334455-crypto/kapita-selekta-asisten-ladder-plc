@@ -20,7 +20,14 @@ npm run dev        # buka http://localhost:3000
 npx tsx lib/test.ts       # uji logika inti
 npx tsx lib/test-blok.ts  # uji CNT, ANDLD, ORLD
 npx tsx lib/test-ai.ts    # uji alur AI dengan model tiruan (tanpa kunci)
+npx tsx lib/test-agent.ts # uji agent, batas langkah, dan persetujuan manusia (tanpa kunci)
 ```
+
+## Agent (lapisan 4)
+- `POST /api/agent` dengan `{"deskripsi": "...", "mode": "penuh", "simpanSebagai": "nama-opsional"}` menjalankan agent: susun, periksa, simulasi, jawab.
+- `GET /api/agent?id=<id>` membaca state tugas dan trace. State tersimpan di `data/tugas/` (tidak ikut git).
+- Kalau `simpanSebagai` diisi, agent hanya mengusulkan penyimpanan. Berkas `data/draf/<nama>.txt` baru ditulis setelah `POST /api/agent/setujui` dengan `{"id": "...", "keputusan": "setuju"}`.
+- Rancangan: `docs/rancangan-agent.md`. Guardrails: `docs/guardrails.md`.
 
 ## Batasan saat ini
 - Rentang alamat di `lib/config.ts` perlu dicocokkan dengan manual W479/W480 untuk model CP1E yang dipakai.

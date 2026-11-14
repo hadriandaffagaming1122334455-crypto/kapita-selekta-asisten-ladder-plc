@@ -11,7 +11,7 @@ export interface Msg {
   tool_calls?: ToolCall[];
   tool_call_id?: string;
 }
-export type ChatFn = (messages: Msg[]) => Promise<Msg>;
+export type ChatFn = (messages: Msg[], tools?: unknown[]) => Promise<Msg>;
 
 // Klien model gateway berformat OpenAI-compatible (/chat/completions dengan tools).
 // Isi .env.local: GATEWAY_BASE_URL, GATEWAY_API_KEY, GATEWAY_MODEL. Kunci tidak pernah masuk kode.
@@ -21,11 +21,11 @@ export function gatewayChat(): ChatFn {
   const model = process.env.GATEWAY_MODEL;
   if (!base || !key || !model) throw new Error("Gateway belum dikonfigurasi.");
 
-  return async (messages) => {
+  return async (messages, tools = TOOLS) => {
     const res = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages, tools: TOOLS, temperature: 0, max_tokens: 1200 }),
+      body: JSON.stringify({ model, messages, tools, temperature: 0, max_tokens: 1200 }),
       signal: AbortSignal.timeout(60_000),
     });
     if (!res.ok) throw new Error(`Gateway membalas ${res.status}.`);

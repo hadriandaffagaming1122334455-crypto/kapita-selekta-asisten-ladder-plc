@@ -3,7 +3,7 @@ import type { Issue, Program, ValidationResult } from "./types";
 
 const CONTACT_OPS = ["LD", "LD NOT", "AND", "AND NOT", "OR", "OR NOT"];
 
-function isInput(a: string): boolean {
+export function isInput(a: string): boolean {
   const m = /^(\d{1,3})\.(\d{2})$/.exec(a);
   if (!m) return false;
   const w = +m[1], b = +m[2];

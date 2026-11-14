@@ -31,6 +31,9 @@ Perubahan dari v2: simulator dan validator sekarang mendukung CNT, ANDLD, dan OR
 
 Hipotesis yang perlu diuji dengan model sungguhan: model mungkin lupa menggabungkan blok dengan ANDLD/ORLD, atau salah urutan input hitung dan reset pada CNT. Catat hasilnya di bagian titik lemah di bawah.
 
+## agent-v1 (lapisan 4)
+Prompt terpisah untuk agent (`prompts/agent-v1.md`), dipakai `app/api/agent/route.ts`. Perbedaan dari v3: ada urutan kerja (susun, periksa, simulasi, jawab), aturan kapan boleh meminta penyimpanan, dan perintah untuk berhenti dengan status "tidak_bisa" kalau perbaikan berulang tidak berhasil. Urutan dan batas itu juga dipaksa oleh kode (`lib/agent.ts`), jadi prompt bukan satu-satunya penjaga.
+
 ## Batas akses tool
 `periksa_program`: fungsi murni di `lib/tools.ts`. Hanya membaca teks yang dikirim model. Tidak membaca berkas, tidak memakai jaringan, tidak membaca variabel lingkungan.
 
