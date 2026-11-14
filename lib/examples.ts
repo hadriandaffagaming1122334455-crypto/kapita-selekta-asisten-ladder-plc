@@ -80,4 +80,133 @@ AND 10.00 // Konveyor
 ORLD
 OUT 100.01 // Lampu deteksi`,
   },
+  {
+    title: "Mail sorting system (laporan UTS/UAS)",
+    description:
+      "Dari laporan tugas PLC. START 0.00 / RESET 0.01 mengunci Holding 10.00. Konveyor M5 (100.02) jalan, buzzer 100.12 bunyi 5 detik. Tahan pemilih paket A-D (0.02-0.05, di laporan W1.01-W1.04): pendorong M1-M4 (100.03-100.06) aktif 2 detik, lalu Box A-D (100.07-100.10) menyala. Tanpa paket terpilih, Box E (100.11) menyala.",
+    program: `// Rung 0: memori penahan (self-holding), RESET memutus
+LD 0.00 // START
+OR 10.00 // Holding
+AND NOT 0.01 // RESET
+OUT 10.00 // Holding
+
+// Rung 1: timer buzzer 5 detik
+LD 10.00 // Holding
+TIM 0010 #0050 // delay
+
+// Rung 2: buzzer bunyi 5 detik pertama setelah START
+LD 10.00 // Holding
+AND NOT T0010 // delay
+OUT 100.12 // buzzer
+
+// Rung 3: L1 merah (standby)
+LD NOT 10.00 // Holding
+OUT 100.00 // L1
+
+// Rung 4: L2 hijau (berjalan)
+LD 10.00 // Holding
+OUT 100.01 // L2
+
+// Rung 5: konveyor M5
+LD 10.00 // Holding
+OUT 100.02 // M5
+
+// Rung 6: pemilih paket A (prioritas tertinggi)
+LD 0.02 // PAKET A
+AND NOT 100.04 // M2
+AND NOT 100.05 // M3
+AND NOT 100.06 // M4
+OUT W2.01 // memori A
+
+// Rung 7: pemilih paket B
+LD 0.03 // PAKET B
+AND NOT 100.03 // M1
+AND NOT 100.05 // M3
+AND NOT 100.06 // M4
+AND NOT W2.01 // memori A
+OUT W2.02 // memori B
+
+// Rung 8: pemilih paket C
+LD 0.04 // PAKET C
+AND NOT 100.03 // M1
+AND NOT 100.04 // M2
+AND NOT 100.06 // M4
+AND NOT W2.01 // memori A
+AND NOT W2.02 // memori B
+OUT W2.03 // memori C
+
+// Rung 9: pemilih paket D
+LD 0.05 // PAKET D
+AND NOT W2.01 // memori A
+AND NOT W2.02 // memori B
+AND NOT W2.03 // memori C
+OUT W2.04 // memori D
+
+// Rung 10-13: timer 2 detik tiap paket
+LD 10.00 // Holding
+AND W2.01 // memori A
+TIM 0001 #0020 // timer A
+
+LD 10.00 // Holding
+AND W2.02 // memori B
+TIM 0002 #0020 // timer B
+
+LD 10.00 // Holding
+AND W2.03 // memori C
+TIM 0003 #0020 // timer C
+
+LD 10.00 // Holding
+AND W2.04 // memori D
+TIM 0004 #0020 // timer D
+
+// Rung 14-17: pendorong M1-M4 aktif selama timer belum selesai
+LD 10.00 // Holding
+AND W2.01 // memori A
+AND NOT T0001 // timer A
+OUT 100.03 // M1
+
+LD 10.00 // Holding
+AND W2.02 // memori B
+AND NOT T0002 // timer B
+OUT 100.04 // M2
+
+LD 10.00 // Holding
+AND W2.03 // memori C
+AND NOT T0003 // timer C
+OUT 100.05 // M3
+
+LD 10.00 // Holding
+AND W2.04 // memori D
+AND NOT T0004 // timer D
+OUT 100.06 // M4
+
+// Rung 18-21: lampu Box A-D menyala setelah timer selesai
+LD 10.00 // Holding
+AND W2.01 // memori A
+AND T0001 // timer A
+OUT 100.07 // Box A
+
+LD 10.00 // Holding
+AND W2.02 // memori B
+AND T0002 // timer B
+OUT 100.08 // Box B
+
+LD 10.00 // Holding
+AND W2.03 // memori C
+AND T0003 // timer C
+OUT 100.09 // Box C
+
+LD 10.00 // Holding
+AND W2.04 // memori D
+AND T0004 // timer D
+OUT 100.10 // Box D
+
+// Rung 22: Box E (default) kalau Box A-D mati
+LD 10.00 // Holding
+AND NOT 100.07 // Box A
+AND NOT 100.08 // Box B
+AND NOT 100.09 // Box C
+AND NOT 100.10 // Box D
+OUT 100.11 // Box E`,
+  },
 ];
