@@ -1,6 +1,7 @@
 import { checkOutput, type DraftOutput, type Mode } from "./schema";
 import { periksaProgram, runTool, type Pemeriksaan } from "./tools";
 import type { ChatFn, Msg } from "./llm";
+import { tolakKeselamatan } from "./guard";
 
 export const MAX_STEPS = 5; // batas jumlah pemanggilan model per permintaan
 const MAX_REPAIR = 1; // berapa kali model boleh diminta memperbaiki format
@@ -30,6 +31,15 @@ export async function runDraft(opts: {
   chat: ChatFn;
 }): Promise<DraftResult> {
   const jejak: TraceItem[] = [];
+  const tolak = tolakKeselamatan(opts.deskripsi);
+  if (tolak) {
+    // Ditolak di kode sebelum model dipanggil: tidak bergantung pada kepatuhan model.
+    return {
+      ok: true,
+      data: { status: "tidak_bisa", alasan: tolak, ringkasan: "Permintaan ditolak: fungsi keselamatan.", program: "", penjelasan: [], asumsi: [], perlu_dicek: [] },
+      jejak,
+    };
+  }
   const bersih = opts.deskripsi.replace(/<\/?deskripsi>/gi, "");
   const messages: Msg[] = [
     { role: "system", content: opts.systemPrompt },

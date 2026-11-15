@@ -37,3 +37,17 @@ export function bersihkanPertanyaan(x: unknown): { ok: true; teks: string } | { 
   if (POLA_MENCURIGAKAN.some((p) => p.test(teks))) return { ok: false, alasan: "Pertanyaan memuat pola yang ditolak oleh penyaring input." };
   return { ok: true, teks };
 }
+
+// Penolakan fungsi keselamatan di KODE, bukan hanya di prompt (prompt v1 menolaknya, tapi v2/v3 sempat tidak memuat aturan ini).
+// Sengaja sempit: hanya frasa yang jelas menyebut fungsi keselamatan. Frasa yang lolos tetap ditangani aturan di prompt.
+const POLA_KESELAMATAN: RegExp[] = [
+  /emergency\s*[- ]?stop|\be-?stop\b|\bestop\b/i,
+  /interlock/i,
+  /fungsi\s+keselamatan|safety\s+(relay|function|circuit|plc)/i,
+  /pengaman\s+(mesin|operator|manusia|orang)|light\s*curtain|tirai\s+cahaya/i,
+];
+export const PESAN_KESELAMATAN =
+  "Fungsi keselamatan (mis. emergency stop atau interlock) tidak disusun oleh asisten ini. Draf hanya untuk belajar dan simulasi, bukan untuk mengamankan mesin atau orang. Konsultasikan dengan dosen dan acu standar keselamatan yang berlaku.";
+export function tolakKeselamatan(teks: string): string | null {
+  return POLA_KESELAMATAN.some((p) => p.test(teks)) ? PESAN_KESELAMATAN : null;
+}

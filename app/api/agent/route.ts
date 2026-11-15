@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   try { chat = gatewayChat(); } catch { return Response.json({ galat: "Gateway belum dikonfigurasi. Isi .env.local lalu jalankan ulang." }, { status: 503 }); }
 
   try {
-    const systemPrompt = await readFile(path.join(process.cwd(), "prompts", "agent-v1.md"), "utf8");
+    const systemPrompt = await readFile(path.join(process.cwd(), "prompts", "agent-v2.md"), "utf8");
     const state = await runAgent({ deskripsi: d.teks, mode, systemPrompt, chat, store, simpanSebagai });
     return Response.json(state);
   } catch {

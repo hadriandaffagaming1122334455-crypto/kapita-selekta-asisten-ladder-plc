@@ -2,6 +2,7 @@ import { checkOutput, type Mode } from "./schema";
 import { periksaProgram, type Pemeriksaan } from "./tools";
 import type { ChatFn, Msg } from "./llm";
 import { AGENT_TOOLS, SIMPAN_TOOL, DRAF_DIR, buatUsulan, jalankanAgentTool, simpanKeBerkas } from "./agent-tools";
+import { tolakKeselamatan } from "./guard";
 import { ID_RE, newId, type Store, type TaskState, type TraceEntry, type UsulanSimpan } from "./agent-store";
 
 export const MAX_LANGKAH = 8; // satu langkah = satu pemanggilan model
@@ -63,6 +64,13 @@ export async function runAgent(o: AgentOpts): Promise<TaskState> {
     await o.store.save(state);
     return state;
   };
+
+  const tolak = tolakKeselamatan(o.deskripsi);
+  if (tolak) {
+    catat("guardrail", "Deskripsi menyebut fungsi keselamatan; ditolak sebelum model dipanggil.");
+    state.hasil = { status: "tidak_bisa", alasan: tolak, ringkasan: "Permintaan ditolak: fungsi keselamatan.", program: "", penjelasan: [], asumsi: [], perlu_dicek: [] };
+    return akhiri("selesai", `Agent tidak menyusun draf: ${tolak}`);
+  }
 
   const tools: unknown[] = o.simpanSebagai ? [...AGENT_TOOLS, SIMPAN_TOOL] : AGENT_TOOLS;
   const messages: Msg[] = [
