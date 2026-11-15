@@ -23,3 +23,17 @@ export function bersihkanDeskripsi(x: unknown): { ok: true; teks: string } | { o
 }
 
 export const NAMA_BERKAS_RE = /^[a-z0-9-]{1,40}$/;
+
+export const MAX_PERTANYAAN = 500;
+
+// Lapis 1 untuk pertanyaan RAG. Sama lemahnya dengan bersihkanDeskripsi: hanya menyaring yang kasar.
+export function bersihkanPertanyaan(x: unknown): { ok: true; teks: string } | { ok: false; alasan: string } {
+  if (typeof x !== "string") return { ok: false, alasan: "Pertanyaan harus berupa teks." };
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(x)) return { ok: false, alasan: "Pertanyaan memuat karakter kontrol." };
+  const teks = x.replace(/<\/?(sumber|deskripsi)>/gi, "").trim();
+  if (teks === "") return { ok: false, alasan: "Pertanyaan tidak boleh kosong." };
+  if (teks.length > MAX_PERTANYAAN) return { ok: false, alasan: `Pertanyaan maksimal ${MAX_PERTANYAAN} karakter.` };
+  if (POLA_MENCURIGAKAN.some((p) => p.test(teks))) return { ok: false, alasan: "Pertanyaan memuat pola yang ditolak oleh penyaring input." };
+  return { ok: true, teks };
+}

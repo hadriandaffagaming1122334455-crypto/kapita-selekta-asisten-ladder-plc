@@ -25,7 +25,7 @@ export function gatewayChat(): ChatFn {
     const res = await fetch(`${base.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ model, messages, tools, temperature: 0, max_tokens: 1200 }),
+      body: JSON.stringify({ model, messages, ...(tools.length > 0 ? { tools } : {}), temperature: 0, max_tokens: 1200 }),
       signal: AbortSignal.timeout(60_000),
     });
     if (!res.ok) throw new Error(`Gateway membalas ${res.status}.`);

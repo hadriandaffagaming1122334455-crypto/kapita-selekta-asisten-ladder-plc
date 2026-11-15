@@ -1,0 +1,12 @@
+[
+  { "no": 1, "pertanyaan": "Berapa rentang nomor timer TIM pada CP1E?", "jenis": "ada", "kunci": [] },
+  { "no": 2, "pertanyaan": "Dalam satuan apa nilai set instruksi TIM ditulis?", "jenis": "ada", "kunci": [] },
+  { "no": 3, "pertanyaan": "Apa fungsi instruksi LD NOT dan kapan dipakai?", "jenis": "ada", "kunci": [] },
+  { "no": 4, "pertanyaan": "Apa fungsi instruksi ANDLD?", "jenis": "ada", "kunci": [] },
+  { "no": 5, "pertanyaan": "Berapa jumlah titik input dan output pada tipe CPU unit yang dipakai?", "jenis": "ada", "kunci": [] },
+  { "no": 6, "pertanyaan": "Bagaimana cara menulis operand instruksi CNT?", "jenis": "ada", "kunci": [] },
+  { "no": 7, "pertanyaan": "Bagaimana membuat lampu menyala 5 detik setelah tombol ditekan, dan alamat output mana yang valid untuk tipe CPU unit saya?", "jenis": "tersebar", "kunci": [] },
+  { "no": 8, "pertanyaan": "Alamat bit apa yang boleh dipakai sebagai bit kerja untuk self-holding, dan bagaimana instruksi OUT memperlakukannya?", "jenis": "tersebar", "kunci": [] },
+  { "no": 9, "pertanyaan": "Berapa harga CP1E-N30?", "jenis": "tidak_ada" },
+  { "no": 10, "pertanyaan": "Bagaimana membuat timer di PLC Siemens S7-1200?", "jenis": "tidak_ada" }
+]
