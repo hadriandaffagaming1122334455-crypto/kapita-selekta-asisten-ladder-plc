@@ -9,7 +9,7 @@ export function isInput(a: string): boolean {
   const w = +m[1], b = +m[2];
   return C.inputWords.includes(w) && b < C.inputBitsPerWord;
 }
-function isOutput(a: string): boolean {
+export function isOutput(a: string): boolean {
   const m = /^(\d{1,3})\.(\d{2})$/.exec(a);
   if (!m) return false;
   const w = +m[1], b = +m[2];

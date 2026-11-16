@@ -24,6 +24,10 @@ npx tsx lib/test-agent.ts # uji agent, batas langkah, dan persetujuan manusia (t
 npx tsx lib/test-rag.ts   # uji RAG: pemotongan, pencarian, penolakan, rujukan (tanpa kunci)
 ```
 
+## Draf (lapisan 2)
+- `POST /api/draft` dengan `{"deskripsi": "...", "mode": "penuh"}`. Alur: guard keselamatan, retrieval 4 chunk manual (kalau indeks sudah dibangun), model (`prompts/v5.md`), validator isi, lalu keluaran dengan `status` BERHASIL, PERLU_KLARIFIKASI, atau DITOLAK. Skema: `lib/schema.ts`; keselarasan dengan rancangan UTS: `docs/selaras-rancangan-sistem.md`.
+- Nomor halaman di `bukti_sumber` hanya terisi kalau teks manual diekstrak dengan pemisah halaman (`pdftotext` memakainya secara bawaan) dan indeks dibangun ulang dengan `npx tsx scripts/bangun-indeks.ts`.
+
 ## Agent (lapisan 4)
 - `POST /api/agent` dengan `{"deskripsi": "...", "mode": "penuh", "simpanSebagai": "nama-opsional"}` menjalankan agent: susun, periksa, simulasi, jawab.
 - `GET /api/agent?id=<id>` membaca state tugas dan trace. State tersimpan di `data/tugas/` (tidak ikut git).

@@ -3,10 +3,8 @@ import path from "node:path";
 import { bersihkanPertanyaan } from "@/lib/guard";
 import { gatewayChat } from "@/lib/llm";
 import { jawabDariDokumen } from "@/lib/rag";
-import { siapkanPencari, type Siap } from "@/lib/rag-muat";
+import { pencariBersama } from "@/lib/rag-muat";
 import type { Mode } from "@/lib/schema";
-
-let cache: Siap | null = null;
 
 // Tanya jawab dari dokumen rujukan. Body: { pertanyaan, mode? }
 export async function POST(req: Request) {
@@ -18,7 +16,7 @@ export async function POST(req: Request) {
   if (body.mode !== undefined && body.mode !== "penuh" && body.mode !== "ringkas") return Response.json({ galat: 'Mode harus "penuh" atau "ringkas".' }, { status: 400 });
   const mode: Mode = body.mode === "ringkas" ? "ringkas" : "penuh";
 
-  cache ??= await siapkanPencari();
+  const cache = await pencariBersama();
   if (!cache) return Response.json({ galat: "Indeks dokumen belum dibangun. Jalankan: npx tsx scripts/bangun-indeks.ts" }, { status: 503 });
 
   let chat;

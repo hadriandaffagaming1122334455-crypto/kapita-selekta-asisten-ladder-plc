@@ -4,7 +4,7 @@ import path from "node:path";
 import { adalahJudul, potongDokumen, type Chunk } from "./rag-chunk";
 import { KAMUS_ID_EN, buatVektor, cosine, kelompokKueri, muatIndeks, pencariLeksikal, pencariVektor, simpanIndeks, tokenisasi, type Embedder } from "./rag-index";
 import { checkRag } from "./rag-schema";
-import { jawabDariDokumen, PESAN_TIDAK_ADA } from "./rag";
+import { ambilSumber, jawabDariDokumen, PESAN_TIDAK_ADA } from "./rag";
 import { bersihkanPertanyaan } from "./guard";
 import type { ChatFn, Msg } from "./llm";
 
@@ -151,6 +151,20 @@ rc = rekam(balas(baik));
 await jawabDariDokumen({ ...dasar, pertanyaan: "decrementing timer", ambang: 0.99, n: 4, chat: rc.chat });
 const hanyaSatu = rc.pesan()[1]?.content ?? "";
 ok(hanyaSatu.includes("[Sumber 1]") && !hanyaSatu.includes("[Sumber 2]"), "konteks: hanya chunk di atas ambang yang masuk, bernomor berurutan");
+
+// ---------- nomor halaman (metadata chunk, rancangan-sistem.md bagian 6) ----------
+const adaHal = potongDokumen({ kode: "XH", judul: "Berhalaman", teks: "SECTION 1 SATU\n\nIsi halaman satu tentang timer.\f\nSECTION 2 DUA\n\nIsi halaman dua tentang penghitung.\f\nSECTION 3 TIGA\n\nIsi halaman tiga tentang blok.\f" });
+ok(adaHal.length === 3 && adaHal.map((c) => c.halaman).join(",") === "1,2,3", "halaman: pemisah \\f (pdftotext) menjadi nomor halaman per chunk");
+ok(adaHal.every((c) => !c.teks.includes("<<HAL") && !c.teks.includes("\f")), "halaman: penanda internal tidak bocor ke teks chunk");
+ok(chunksA.every((c) => c.halaman === undefined), "halaman: teks tanpa pemisah halaman tidak diberi nomor (tidak mengarang)");
+const rawHal = potongDokumen({ kode: "XR", judul: "R", teks: "SECTION 1 SATU\n\n" + "kata ".repeat(150) + "\f\n" + "lain ".repeat(150) }, { maksKata: 100, tumpangTindihKata: 10 });
+ok(rawHal.every((c) => typeof c.halaman === "number" && c.halaman >= 1) && rawHal.some((c) => c.halaman === 2), "halaman: chunk hasil pemecahan paragraf raksasa tetap bernomor halaman");
+
+// ---------- ambilSumber (dipakai alur draf) ----------
+const pc = pencariLeksikal(semua, KAMUS_ID_EN);
+const amb = await ambilSumber("timer set value unit", pc, 0.5);
+ok(amb.dipakai.length >= 1 && amb.terambil.length === amb.hasil.length && amb.terambil.every((t, i) => t.no === i + 1), "ambilSumber: chunk di atas ambang dipisahkan, daftar terambil bernomor");
+ok((await ambilSumber("harga mobil bekas", pc, 0.5)).dipakai.length === 0, "ambilSumber: pertanyaan di luar manual tidak menghasilkan sumber");
 
 // ---------- penjaga pertanyaan ----------
 ok(bersihkanPertanyaan("berapa rentang timer?").ok, "guard: pertanyaan biasa lolos");

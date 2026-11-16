@@ -1,81 +1,162 @@
-// Schema tetap untuk output model (lapisan 2). Dipakai untuk memeriksa jawaban model
-// sebelum sampai ke pengguna. Sengaja ditulis tangan, tanpa pustaka tambahan.
+// Schema tetap untuk output model (lapisan 2). Mengikuti rancangan-sistem.md bagian 4:
+//   status | tabel_io | rung | asumsi | tidak_dapat_ditentukan | bukti_sumber
+// Satu field tambahan, "alasan", karena rancangan tidak punya tempat untuk alasan penolakan (DITOLAK).
+// Dipakai untuk memeriksa BENTUK jawaban model sebelum sampai ke pengguna. Pemeriksaan isi (alamat, sintaks,
+// kecocokan tabel I/O dengan rung, kutipan) ada di lib/keluaran.ts. Sengaja ditulis tangan, tanpa pustaka tambahan.
 
 export type Mode = "penuh" | "ringkas";
+export type StatusDraf = "BERHASIL" | "PERLU_KLARIFIKASI" | "DITOLAK";
 
-export interface DraftOutput {
-  status: "draf" | "tidak_bisa";
-  alasan: string; // wajib terisi jika tidak_bisa, kosong jika draf
-  ringkasan: string;
-  program: string; // mnemonic format parser; kosong jika tidak_bisa
-  penjelasan: string[]; // mode penuh: satu butir per rung; mode ringkas: kosong
-  asumsi: string[];
-  perlu_dicek: string[]; // minimal satu butir jika draf
+export interface TabelIoItem {
+  alamat: string; // mis. "0.00" atau "100.00"
+  nama: string;
+  jenis: "input" | "output";
+  keterangan: string;
+}
+export interface RungItem {
+  nomor: number; // berurutan mulai dari 1
+  instruksi: string[]; // satu mnemonic Omron per butir, komentar "// nama" boleh di akhir
+}
+export interface BuktiSumber {
+  dokumen: string; // kode dokumen, mis. "W483"
+  halaman: number | null; // diisi sistem dari metadata chunk; null kalau indeks tidak punya nomor halaman
+  kutipan: string; // kutipan langsung dari manual; diverifikasi sistem terhadap teks chunk
 }
 
-const KEYS = ["status", "alasan", "ringkasan", "program", "penjelasan", "asumsi", "perlu_dicek"];
-const MAX_PROGRAM = 4000;
+export interface DraftOutput {
+  status: StatusDraf;
+  alasan: string; // wajib terisi jika DITOLAK, kosong jika BERHASIL, bebas (penjelasan sistem) jika PERLU_KLARIFIKASI
+  tabel_io: TabelIoItem[];
+  rung: RungItem[]; // kosong kecuali BERHASIL
+  asumsi: string[];
+  tidak_dapat_ditentukan: string[]; // hal yang kurang dari deskripsi; wajib terisi jika PERLU_KLARIFIKASI
+  bukti_sumber: BuktiSumber[];
+}
+
+const KEYS = ["status", "alasan", "tabel_io", "rung", "asumsi", "tidak_dapat_ditentukan", "bukti_sumber"];
+const STATUS: StatusDraf[] = ["BERHASIL", "PERLU_KLARIFIKASI", "DITOLAK"];
+export const MAX_PROGRAM = 4000;
 const MAX_ITEMS = 20;
 const MAX_TEXT = 400;
-export const MAX_RINGKAS = 240;
+const MAX_IO = 30;
+const MAX_RUNG = 20;
+const MAX_INSTRUKSI = 40;
+export const MIN_KUTIPAN = 15;
+export const MAX_KUTIPAN = 300;
+export const MAX_ASUMSI_RINGKAS = 3;
+export const MAX_BUKTI_RINGKAS = 1;
+const MAX_BUKTI = 5;
 
 export type CheckResult = { ok: true; value: DraftOutput } | { ok: false; errors: string[] };
 
+/** Mengubah daftar rung menjadi teks mnemonic untuk parser, validator, dan simulator (satu instruksi per baris, baris kosong antar rung). */
+export function rungKeProgram(rung: RungItem[]): string {
+  return rung.map((r) => r.instruksi.join("\n")).join("\n\n");
+}
+
+const isObj = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
+
 export function checkOutput(x: unknown, mode: Mode): CheckResult {
   const errors: string[] = [];
-  if (typeof x !== "object" || x === null || Array.isArray(x)) {
-    return { ok: false, errors: ["Output harus berupa satu objek JSON."] };
-  }
-  const o = x as Record<string, unknown>;
+  if (!isObj(x)) return { ok: false, errors: ["Output harus berupa satu objek JSON."] };
+  const o = x;
 
   for (const k of Object.keys(o)) if (!KEYS.includes(k)) errors.push(`Field tambahan tidak diizinkan: "${k}".`);
   for (const k of KEYS) if (!(k in o)) errors.push(`Field wajib hilang: "${k}".`);
   if (errors.length > 0) return { ok: false, errors };
 
-  const str = (k: string) => {
-    if (typeof o[k] !== "string") errors.push(`"${k}" harus string.`);
-    return typeof o[k] === "string" ? (o[k] as string) : "";
-  };
-  const arr = (k: string) => {
+  const strArr = (k: string): string[] => {
     const v = o[k];
     if (!Array.isArray(v) || !v.every((i) => typeof i === "string" && i.trim() !== "" && i.length <= MAX_TEXT)) {
       errors.push(`"${k}" harus berupa daftar string tidak kosong (maks ${MAX_TEXT} karakter per butir).`);
-      return [] as string[];
+      return [];
     }
     if (v.length > MAX_ITEMS) errors.push(`"${k}" maksimal ${MAX_ITEMS} butir.`);
     return v as string[];
   };
 
-  const status = str("status");
-  const alasan = str("alasan");
-  const ringkasan = str("ringkasan");
-  const program = str("program");
-  const penjelasan = arr("penjelasan");
-  const asumsi = arr("asumsi");
-  const perluDicek = arr("perlu_dicek");
+  const status = o.status as StatusDraf;
+  if (!STATUS.includes(status)) errors.push('"status" harus salah satu dari "BERHASIL", "PERLU_KLARIFIKASI", "DITOLAK".');
+  const alasan = typeof o.alasan === "string" ? o.alasan : (errors.push('"alasan" harus string.'), "");
+  if (alasan.length > MAX_TEXT) errors.push(`"alasan" maksimal ${MAX_TEXT} karakter.`);
+  const asumsi = strArr("asumsi");
+  const tidakDapat = strArr("tidak_dapat_ditentukan");
 
-  if (status !== "draf" && status !== "tidak_bisa") errors.push('"status" harus "draf" atau "tidak_bisa".');
-  if (ringkasan.trim() === "") errors.push('"ringkasan" tidak boleh kosong.');
-  if (program.length > MAX_PROGRAM) errors.push(`"program" terlalu panjang (maks ${MAX_PROGRAM} karakter).`);
+  // ---- tabel_io ----
+  const tabelIo: TabelIoItem[] = [];
+  if (!Array.isArray(o.tabel_io) || o.tabel_io.length > MAX_IO) errors.push(`"tabel_io" harus berupa daftar (maks ${MAX_IO} butir).`);
+  else {
+    for (const [i, t] of o.tabel_io.entries()) {
+      const ket = isObj(t) ? Object.keys(t).sort().join(",") : "";
+      if (!isObj(t) || ket !== "alamat,jenis,keterangan,nama") { errors.push(`tabel_io[${i}] harus berisi tepat: alamat, nama, jenis, keterangan.`); continue; }
+      const { alamat, nama, jenis, keterangan } = t;
+      if (typeof alamat !== "string" || alamat.trim() === "") { errors.push(`tabel_io[${i}].alamat harus string tidak kosong.`); continue; }
+      if (typeof nama !== "string" || nama.trim() === "" || nama.length > 40) { errors.push(`tabel_io[${i}].nama harus string tidak kosong (maks 40 karakter).`); continue; }
+      if (jenis !== "input" && jenis !== "output") { errors.push(`tabel_io[${i}].jenis harus "input" atau "output".`); continue; }
+      if (typeof keterangan !== "string" || keterangan.length > 120) { errors.push(`tabel_io[${i}].keterangan harus string (maks 120 karakter).`); continue; }
+      tabelIo.push({ alamat: alamat.trim(), nama: nama.trim(), jenis, keterangan });
+    }
+  }
 
-  if (status === "draf") {
-    if (program.trim() === "") errors.push('Status "draf" butuh "program" terisi.');
-    if (alasan !== "") errors.push('Status "draf" harus punya "alasan" kosong.');
-    if (perluDicek.length < 1) errors.push('Status "draf" butuh minimal satu butir "perlu_dicek".');
-    if (mode === "penuh" && penjelasan.length < 1) errors.push('Mode "penuh" butuh minimal satu butir "penjelasan".');
+  // ---- rung ----
+  const rung: RungItem[] = [];
+  if (!Array.isArray(o.rung) || o.rung.length > MAX_RUNG) errors.push(`"rung" harus berupa daftar (maks ${MAX_RUNG} rung).`);
+  else {
+    for (const [i, r] of o.rung.entries()) {
+      const ok = isObj(r) && Object.keys(r).sort().join(",") === "instruksi,nomor";
+      if (!isObj(r) || !ok) { errors.push(`rung[${i}] harus berisi tepat: nomor, instruksi.`); continue; }
+      if (r.nomor !== i + 1) errors.push(`rung[${i}].nomor harus ${i + 1} (nomor berurutan mulai dari 1).`);
+      const ins = r.instruksi;
+      if (!Array.isArray(ins) || ins.length < 1 || ins.length > MAX_INSTRUKSI || !ins.every((s) => typeof s === "string" && s.trim() !== "" && !s.includes("\n") && s.length <= 100)) {
+        errors.push(`rung[${i}].instruksi harus daftar 1 sampai ${MAX_INSTRUKSI} string, satu instruksi per butir (maks 100 karakter, tanpa baris baru).`);
+        continue;
+      }
+      rung.push({ nomor: i + 1, instruksi: (ins as string[]).map((s) => s.trim()) });
+    }
   }
-  if (status === "tidak_bisa") {
-    if (program !== "") errors.push('Status "tidak_bisa" harus punya "program" kosong.');
-    if (alasan.trim() === "") errors.push('Status "tidak_bisa" butuh "alasan" terisi.');
+  const panjangProgram = rungKeProgram(rung).length;
+  if (panjangProgram > MAX_PROGRAM) errors.push(`Program terlalu panjang (maks ${MAX_PROGRAM} karakter).`);
+
+  // ---- bukti_sumber (bentuk saja; kecocokan dengan teks manual diperiksa di lib/keluaran.ts) ----
+  const bukti: BuktiSumber[] = [];
+  if (!Array.isArray(o.bukti_sumber) || o.bukti_sumber.length > MAX_BUKTI) errors.push(`"bukti_sumber" harus berupa daftar (maks ${MAX_BUKTI} butir).`);
+  else {
+    for (const [i, b] of o.bukti_sumber.entries()) {
+      if (!isObj(b) || Object.keys(b).sort().join(",") !== "dokumen,halaman,kutipan") { errors.push(`bukti_sumber[${i}] harus berisi tepat: dokumen, halaman, kutipan.`); continue; }
+      const { dokumen, halaman, kutipan } = b;
+      if (typeof dokumen !== "string" || dokumen.trim() === "") { errors.push(`bukti_sumber[${i}].dokumen harus string tidak kosong.`); continue; }
+      if (halaman !== null && !(typeof halaman === "number" && Number.isInteger(halaman) && halaman >= 1)) { errors.push(`bukti_sumber[${i}].halaman harus bilangan bulat >= 1 atau null.`); continue; }
+      if (typeof kutipan !== "string" || kutipan.trim().length < MIN_KUTIPAN || kutipan.length > MAX_KUTIPAN) { errors.push(`bukti_sumber[${i}].kutipan harus string ${MIN_KUTIPAN} sampai ${MAX_KUTIPAN} karakter.`); continue; }
+      bukti.push({ dokumen: dokumen.trim(), halaman: halaman as number | null, kutipan: kutipan.trim() });
+    }
   }
-  if (mode === "ringkas") {
-    if (ringkasan.length > MAX_RINGKAS) errors.push(`Mode "ringkas": "ringkasan" maksimal ${MAX_RINGKAS} karakter.`);
-    if (penjelasan.length !== 0) errors.push('Mode "ringkas": "penjelasan" harus daftar kosong.');
+
+  // ---- aturan antar field menurut status ----
+  if (STATUS.includes(status)) {
+    if (status === "BERHASIL") {
+      if (rung.length < 1) errors.push('Status "BERHASIL" butuh minimal satu rung.');
+      if (tabelIo.length < 1) errors.push('Status "BERHASIL" butuh "tabel_io" terisi.');
+      if (tidakDapat.length > 0) errors.push('Status "BERHASIL" harus punya "tidak_dapat_ditentukan" kosong. Kalau masih ada yang tidak jelas, pakai "PERLU_KLARIFIKASI".');
+      if (alasan !== "") errors.push('Status "BERHASIL" harus punya "alasan" kosong.');
+      if (mode === "penuh" && tabelIo.some((t) => t.keterangan.trim() === "")) errors.push('Mode "penuh": tiap butir "tabel_io" butuh "keterangan" terisi.');
+    }
+    if (status === "PERLU_KLARIFIKASI") {
+      if (tidakDapat.length < 1) errors.push('Status "PERLU_KLARIFIKASI" butuh minimal satu butir "tidak_dapat_ditentukan" (isi dengan pertanyaan yang harus dijawab pengguna).');
+      if (rung.length > 0) errors.push('Status "PERLU_KLARIFIKASI" harus punya "rung" kosong: logika yang belum jelas tidak boleh ditebak.');
+      if (bukti.length > 0) errors.push('Status "PERLU_KLARIFIKASI" harus punya "bukti_sumber" kosong.');
+    }
+    if (status === "DITOLAK") {
+      if (alasan.trim() === "") errors.push('Status "DITOLAK" butuh "alasan" terisi.');
+      if (tabelIo.length > 0 || rung.length > 0 || bukti.length > 0 || asumsi.length > 0 || tidakDapat.length > 0)
+        errors.push('Status "DITOLAK" harus punya "tabel_io", "rung", "asumsi", "tidak_dapat_ditentukan", dan "bukti_sumber" kosong.');
+    }
+    if (mode === "ringkas") {
+      if (tabelIo.some((t) => t.keterangan !== "")) errors.push('Mode "ringkas": "keterangan" di "tabel_io" harus string kosong.');
+      if (asumsi.length > MAX_ASUMSI_RINGKAS) errors.push(`Mode "ringkas": "asumsi" maksimal ${MAX_ASUMSI_RINGKAS} butir.`);
+      if (bukti.length > MAX_BUKTI_RINGKAS) errors.push(`Mode "ringkas": "bukti_sumber" maksimal ${MAX_BUKTI_RINGKAS} butir.`);
+    }
   }
 
   if (errors.length > 0) return { ok: false, errors };
-  return {
-    ok: true,
-    value: { status: status as DraftOutput["status"], alasan, ringkasan, program, penjelasan, asumsi, perlu_dicek: perluDicek },
-  };
+  return { ok: true, value: { status, alasan, tabel_io: tabelIo, rung, asumsi, tidak_dapat_ditentukan: tidakDapat, bukti_sumber: bukti } };
 }

@@ -1,7 +1,7 @@
 import type { ChatFn, Msg } from "./llm";
 import type { Mode } from "./schema";
 import { checkRag } from "./rag-schema";
-import type { Pencari } from "./rag-index";
+import type { Hasil, Pencari } from "./rag-index";
 
 export const N_AWAL = 4;
 export const PESAN_TIDAK_ADA = "Informasi ini tidak ditemukan di dokumen rujukan yang tersedia.";
@@ -45,14 +45,18 @@ function extractJson(text: string): unknown {
   return JSON.parse(text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
 }
 
-export async function jawabDariDokumen(o: RagOpts): Promise<RagResult> {
-  const n = o.n ?? N_AWAL;
-  const hasil = await o.pencari.cari(o.pertanyaan, n);
+/** Mengambil n chunk teratas dan memisahkan yang lolos ambang. Dipakai bersama oleh tanya-jawab dan penyusunan draf. */
+export async function ambilSumber(pertanyaan: string, pencari: Pencari, ambang: number, n: number = N_AWAL): Promise<{ hasil: Hasil[]; terambil: Terambil[]; dipakai: Hasil[] }> {
+  const hasil = await pencari.cari(pertanyaan, n);
   const terambil: Terambil[] = hasil.map((h, i) => ({
     no: i + 1, chunkId: h.chunk.id, dokumen: h.chunk.dokumen, bagian: h.chunk.bagian,
-    kemiripan: Math.round(h.kemiripan * 1000) / 1000, lolosAmbang: h.kemiripan >= o.ambang,
+    kemiripan: Math.round(h.kemiripan * 1000) / 1000, lolosAmbang: h.kemiripan >= ambang,
   }));
-  const dipakai = hasil.filter((h) => h.kemiripan >= o.ambang);
+  return { hasil, terambil, dipakai: hasil.filter((h) => h.kemiripan >= ambang) };
+}
+
+export async function jawabDariDokumen(o: RagOpts): Promise<RagResult> {
+  const { hasil, terambil, dipakai } = await ambilSumber(o.pertanyaan, o.pencari, o.ambang, o.n ?? N_AWAL);
 
   // Penolakan tegas SEBELUM model dipanggil: tidak ada chunk yang cukup mirip, tidak ada dasar untuk menjawab.
   if (dipakai.length === 0) {

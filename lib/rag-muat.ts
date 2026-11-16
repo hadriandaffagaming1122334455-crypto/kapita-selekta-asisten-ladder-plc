@@ -27,3 +27,12 @@ export async function siapkanPencari(dataDir: string = path.join(process.cwd(), 
   }
   return { pencari: pencariLeksikal(idx.chunks, KAMUS_ID_EN), ambang: Number(process.env.RAG_AMBANG ?? konf.ambangLeksikal ?? AMBANG_LEKSIKAL_AWAL), jumlahChunk: idx.chunks.length };
 }
+
+// Pencari dipakai bersama oleh /api/draft, /api/agent, dan /api/tanya. Hanya hasil yang berhasil dimuat yang disimpan,
+// jadi indeks yang baru dibangun terbaca tanpa menjalankan ulang server. Mengembalikan null kalau indeks belum ada.
+let tersimpan: Siap | null = null;
+export async function pencariBersama(): Promise<Siap | null> {
+  if (tersimpan) return tersimpan;
+  try { tersimpan = await siapkanPencari(); } catch { tersimpan = null; }
+  return tersimpan;
+}

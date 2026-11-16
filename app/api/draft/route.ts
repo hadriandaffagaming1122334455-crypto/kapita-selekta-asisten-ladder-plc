@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { runDraft } from "@/lib/draft";
 import { gatewayChat } from "@/lib/llm";
+import { pencariBersama } from "@/lib/rag-muat";
 import type { Mode } from "@/lib/schema";
 
 const MAX_DESKRIPSI = 1500;
@@ -31,8 +32,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    const systemPrompt = await readFile(path.join(process.cwd(), "prompts", "v4.md"), "utf8");
-    const hasil = await runDraft({ deskripsi, mode, systemPrompt, chat });
+    const systemPrompt = await readFile(path.join(process.cwd(), "prompts", "v5.md"), "utf8");
+    const siap = await pencariBersama(); // null kalau indeks manual belum dibangun: draf tetap dibuat, tanpa bukti manual
+    const hasil = await runDraft({ deskripsi, mode, systemPrompt, chat, pencari: siap?.pencari, ambang: siap?.ambang });
     return Response.json(hasil, { status: hasil.ok ? 200 : 422 });
   } catch {
     return Response.json({ galat: "Pemanggilan model gagal." }, { status: 502 });

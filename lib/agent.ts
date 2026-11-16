@@ -1,8 +1,12 @@
-import { checkOutput, type Mode } from "./schema";
+import type { Mode } from "./schema";
 import { periksaProgram, type Pemeriksaan } from "./tools";
 import type { ChatFn, Msg } from "./llm";
 import { AGENT_TOOLS, SIMPAN_TOOL, DRAF_DIR, buatUsulan, jalankanAgentTool, simpanKeBerkas } from "./agent-tools";
 import { tolakKeselamatan } from "./guard";
+import { ambilSumber } from "./rag";
+import type { Pencari } from "./rag-index";
+import type { Chunk } from "./rag-chunk";
+import { blokSumber, CATATAN_TANPA_SUMBER, keluaranDitolak, keluaranKlarifikasiGagal, MAX_PERBAIKAN, periksaKeluaran } from "./keluaran";
 import { ID_RE, newId, type Store, type TaskState, type TraceEntry, type UsulanSimpan } from "./agent-store";
 
 export const MAX_LANGKAH = 8; // satu langkah = satu pemanggilan model
@@ -23,6 +27,8 @@ export interface AgentOpts {
   maxLangkah?: number;
   exec?: (name: string, argsJson: string) => string;
   id?: string;
+  pencari?: Pencari; // tanpa pencari (indeks belum dibangun): agent tetap jalan, tanpa bukti manual
+  ambang?: number;
 }
 
 const potong = (s: string, n: number) => (s.length > n ? s.slice(0, n) + "…" : s);
@@ -68,8 +74,23 @@ export async function runAgent(o: AgentOpts): Promise<TaskState> {
   const tolak = tolakKeselamatan(o.deskripsi);
   if (tolak) {
     catat("guardrail", "Deskripsi menyebut fungsi keselamatan; ditolak sebelum model dipanggil.");
-    state.hasil = { status: "tidak_bisa", alasan: tolak, ringkasan: "Permintaan ditolak: fungsi keselamatan.", program: "", penjelasan: [], asumsi: [], perlu_dicek: [] };
+    state.hasil = keluaranDitolak(tolak);
     return akhiri("selesai", `Agent tidak menyusun draf: ${tolak}`);
+  }
+
+  // Retrieval sebelum loop: potongan manual dipakai sebagai bukti, dan kutipannya diverifikasi di jawaban akhir.
+  const bersih = o.deskripsi.replace(/<\/?(deskripsi|sumber)>/gi, "");
+  let sumber: Chunk[] = [];
+  if (o.pencari) {
+    try {
+      const r = await ambilSumber(bersih, o.pencari, o.ambang ?? 0.3);
+      sumber = r.dipakai.map((h) => h.chunk);
+      catat("sistem", `Retrieval: ${r.dipakai.length} dari ${r.hasil.length} chunk lolos ambang${r.dipakai.length === 0 ? " (tidak ditemukan di manual)" : ""}.`);
+    } catch (e) {
+      catat("sistem", `Retrieval gagal, lanjut tanpa sumber: ${(e as Error).message}`);
+    }
+  } else {
+    catat("sistem", "Indeks manual belum tersedia; agent berjalan tanpa bukti manual.");
   }
 
   const tools: unknown[] = o.simpanSebagai ? [...AGENT_TOOLS, SIMPAN_TOOL] : AGENT_TOOLS;
@@ -80,7 +101,7 @@ export async function runAgent(o: AgentOpts): Promise<TaskState> {
       content:
         `Mode output: ${o.mode}\n` +
         (o.simpanSebagai ? `Simpan hasil akhir dengan nama: ${o.simpanSebagai}\n` : "Pengguna tidak meminta penyimpanan berkas.\n") +
-        `\n<deskripsi>\n${o.deskripsi}\n</deskripsi>`,
+        `\n<deskripsi>\n${bersih}\n</deskripsi>\n\n${blokSumber(sumber)}`,
     },
   ];
   let repairs = 0;
@@ -165,26 +186,28 @@ export async function runAgent(o: AgentOpts): Promise<TaskState> {
     catat("model", teks);
     let galat: string[] = [];
     try {
-      const cek = checkOutput(extractJson(teks), o.mode);
+      const cek = periksaKeluaran(extractJson(teks), o.mode, sumber, { catatanTanpaSumber: CATATAN_TANPA_SUMBER });
       if (cek.ok) {
         state.hasil = cek.value;
-        if (cek.value.status === "tidak_bisa") return akhiri("selesai", `Agent tidak menyusun draf: ${cek.value.alasan}`);
-        state.programTerbaru = cek.value.program;
-        state.periksaTerakhir = periksaProgram(cek.value.program); // dihitung ulang oleh sistem, bukan klaim model
-        const lolos = state.periksaTerakhir.valid;
+        if (cek.value.status === "DITOLAK") return akhiri("selesai", `Agent tidak menyusun draf: ${cek.value.alasan}`);
+        if (cek.value.status === "PERLU_KLARIFIKASI") return akhiri("selesai", `Agent meminta klarifikasi: ${cek.value.tidak_dapat_ditentukan.join(" ")}`);
+        state.programTerbaru = cek.program;
+        state.periksaTerakhir = cek.pemeriksaan ?? periksaProgram(cek.program); // dihitung ulang oleh sistem, bukan klaim model
         const tambahan = o.simpanSebagai ? " Draf tidak disimpan karena tidak melalui usulan penyimpanan." : "";
-        return akhiri("selesai", (lolos ? "Selesai. Program akhir lolos pemeriksaan sistem." : "Selesai, TETAPI program akhir TIDAK lolos pemeriksaan sistem. Jangan dipakai sebelum diperbaiki.") + tambahan);
+        return akhiri("selesai", "Selesai. Program akhir lolos pemeriksaan sistem." + tambahan);
       }
       galat = cek.errors;
     } catch { galat = ["Jawaban bukan JSON valid."]; }
 
-    if (repairs < 1) {
+    if (repairs < MAX_PERBAIKAN) {
       repairs++;
-      messages.push({ role: "user", content: `Output tidak sesuai format: ${galat.join(" ")} Kirim ulang sebagai satu objek JSON saja.` });
-      catat("guardrail", `Format jawaban akhir ditolak: ${galat.join(" ")}`);
+      messages.push({ role: "user", content: `Output tidak sesuai aturan: ${galat.join(" ")} Kirim ulang sebagai satu objek JSON saja.` });
+      catat("guardrail", `Jawaban akhir ditolak (perbaikan ${repairs} dari ${MAX_PERBAIKAN}): ${galat.join(" ")}`);
       continue;
     }
-    return akhiri("gagal", `Format jawaban akhir tidak valid setelah diperbaiki sekali: ${galat.join(" ")}`);
+    // Tetap tidak valid setelah perbaikan: PERLU_KLARIFIKASI dan draf tidak ditampilkan (rancangan-sistem.md bagian 3).
+    state.hasil = keluaranKlarifikasiGagal(galat);
+    return akhiri("selesai", `Jawaban akhir tidak lolos pemeriksaan setelah ${MAX_PERBAIKAN} kali perbaikan, jadi draf tidak ditampilkan (PERLU_KLARIFIKASI). Galat terakhir: ${galat.join(" ")}`);
   }
 
   return akhiri(

@@ -6,6 +6,8 @@ import { memoryStore, fileStore, ID_RE, type Store } from "./agent-store";
 import { jalankanAgentTool, simulasikan, AGENT_TOOLS, buatUsulan } from "./agent-tools";
 import { bersihkanDeskripsi } from "./guard";
 import type { ChatFn, Msg } from "./llm";
+import type { Chunk } from "./rag-chunk";
+import type { Pencari } from "./rag-index";
 
 let fail = 0;
 const ok = (c: boolean, m: string) => { console.log((c ? "PASS " : "FAIL ") + m); if (!c) fail++; };
@@ -13,7 +15,16 @@ const ok = (c: boolean, m: string) => { console.log((c ? "PASS " : "FAIL ") + m)
 const PROG = "LD 0.00 // START\nOR W0.00 // Holding\nAND NOT 0.01 // STOP\nOUT W0.00 // Holding\n\nLD W0.00 // Holding\nOUT 100.00 // Lampu";
 const BAD = "LD 9.99\nOUT 100.00";
 const SKEN = { skenario: [{ scan: 1, set: { "0.00": true } }, { scan: 2, set: { "0.00": false } }, { scan: 5, set: { "0.01": true } }], periksa_pada: [0, 3, 6], alamat_pantau: ["100.00"] };
-const FINAL = { status: "draf", alasan: "", ringkasan: "START menyalakan lampu dan menahannya sampai STOP.", program: PROG, penjelasan: ["Rung 1: self-holding.", "Rung 2: lampu."], asumsi: ["Alamat dipilih sendiri."], perlu_dicek: ["Uji di CX-Programmer."] };
+const IO = [
+  { alamat: "0.00", nama: "START", jenis: "input", keterangan: "Tombol start" },
+  { alamat: "0.01", nama: "STOP", jenis: "input", keterangan: "Tombol stop" },
+  { alamat: "100.00", nama: "Lampu", jenis: "output", keterangan: "Lampu indikator" },
+];
+const RUNG = [
+  { nomor: 1, instruksi: ["LD 0.00 // START", "OR W0.00 // Holding", "AND NOT 0.01 // STOP", "OUT W0.00 // Holding"] },
+  { nomor: 2, instruksi: ["LD W0.00 // Holding", "OUT 100.00 // Lampu"] },
+];
+const FINAL = { status: "BERHASIL", alasan: "", tabel_io: IO, rung: RUNG, asumsi: ["Alamat dipilih sendiri."], tidak_dapat_ditentukan: [], bukti_sumber: [] };
 
 const call = (id: string, name: string, args: object): Msg => ({ role: "assistant", content: null, tool_calls: [{ id, type: "function", function: { name, arguments: JSON.stringify(args) } }] });
 const fin = (o: unknown): Msg => ({ role: "assistant", content: JSON.stringify(o) });
@@ -70,13 +81,16 @@ const base = (store: Store, chat: ChatFn) => ({ deskripsi: "lampu menyala saat S
 
   // ---------- jawaban akhir program tidak valid: ditandai sistem ----------
   st = memoryStore();
-  r = await runAgent(base(st, urut(fin({ ...FINAL, program: BAD }))));
-  ok(r.status === "selesai" && r.periksaTerakhir?.valid === false && r.pesan.includes("TIDAK lolos"), "klaim model dicek ulang: program invalid ditandai TIDAK lolos");
+  r = await runAgent(base(st, urut(fin({ ...FINAL, rung: [{ nomor: 1, instruksi: ["LD 9.99", "OUT 100.00"] }] }))));
+  ok(r.status === "selesai" && r.hasil?.status === "PERLU_KLARIFIKASI" && r.hasil.rung.length === 0 && r.pesan.includes("draf tidak ditampilkan"), "klaim model dicek ulang: program invalid setelah 2 perbaikan -> PERLU_KLARIFIKASI, draf tidak ditampilkan");
+  ok(r.trace.filter((t) => t.jenis === "guardrail").length === 2 && r.programTerbaru === "", "klaim model dicek ulang: tepat 2 perbaikan dicatat, tidak ada program yang diterima");
 
-  // ---------- tidak_bisa ----------
+  // ---------- DITOLAK dan PERLU_KLARIFIKASI ----------
   st = memoryStore();
-  r = await runAgent(base(st, urut(fin({ status: "tidak_bisa", alasan: "Butuh operasi aritmetika.", ringkasan: "Tidak bisa.", program: "", penjelasan: [], asumsi: [], perlu_dicek: [] }))));
-  ok(r.status === "selesai" && r.hasil?.status === "tidak_bisa" && r.pesan.includes("aritmetika"), "tidak_bisa: agent menolak dengan alasan");
+  r = await runAgent(base(st, urut(fin({ status: "DITOLAK", alasan: "Butuh operasi aritmetika.", tabel_io: [], rung: [], asumsi: [], tidak_dapat_ditentukan: [], bukti_sumber: [] }))));
+  ok(r.status === "selesai" && r.hasil?.status === "DITOLAK" && r.pesan.includes("aritmetika"), "DITOLAK: agent menolak dengan alasan");
+  r = await runAgent(base(memoryStore(), urut(fin({ ...FINAL, status: "PERLU_KLARIFIKASI", rung: [], tidak_dapat_ditentukan: ["Berapa lampu yang harus menyala?"] }))));
+  ok(r.status === "selesai" && r.hasil?.status === "PERLU_KLARIFIKASI" && r.pesan.includes("Berapa lampu"), "PERLU_KLARIFIKASI: agent bertanya, tidak menebak");
 
   // ---------- batas langkah ----------
   st = memoryStore();
@@ -117,9 +131,23 @@ const base = (store: Store, chat: ChatFn) => ({ deskripsi: "lampu menyala saat S
 
   // ---------- format jawaban akhir ----------
   r = await runAgent(base(memoryStore(), urut({ role: "assistant", content: "bukan json" }, fin(FINAL))));
-  ok(r.status === "selesai", "format: jawaban akhir salah diperbaiki satu kali");
+  ok(r.status === "selesai" && r.hasil?.status === "BERHASIL", "format: jawaban akhir salah diperbaiki");
+  r = await runAgent(base(memoryStore(), urut({ role: "assistant", content: "bukan json" }, { role: "assistant", content: "masih bukan json" }, fin(FINAL))));
+  ok(r.status === "selesai" && r.hasil?.status === "BERHASIL", "format: perbaikan kedua masih diizinkan (maks 2)");
   r = await runAgent(base(memoryStore(), urut({ role: "assistant", content: "bukan json" })));
-  ok(r.status === "gagal", "format: salah dua kali berakhir gagal");
+  ok(r.status === "selesai" && r.hasil?.status === "PERLU_KLARIFIKASI", "format: tetap salah setelah 2 perbaikan -> PERLU_KLARIFIKASI, bukan draf");
+
+  // ---------- retrieval dan bukti ----------
+  const chunkW: Chunk = { id: "W483-012", dokumen: "W483", judul: "Instructions", bagian: "3-4 TIMER", halaman: 123, teks: "The set value of the TIM instruction is given in units of 0.1 s. The range is 0 to 9999." };
+  const pencari: Pencari = { jenis: "leksikal", async cari() { return [{ chunk: chunkW, skor: 1, kemiripan: 0.9 }]; } };
+  const dgBukti = { ...FINAL, bukti_sumber: [{ dokumen: "W483", halaman: null, kutipan: "units of 0.1 s. The range is 0 to 9999" }] };
+  r = await runAgent({ ...base(memoryStore(), urut(fin(dgBukti))), pencari, ambang: 0.3 });
+  ok(r.status === "selesai" && r.hasil?.bukti_sumber[0]?.halaman === 123, "retrieval: agent menerima bukti terverifikasi, halaman diisi sistem");
+  ok(r.trace.some((t) => t.jenis === "sistem" && t.ringkas.includes("Retrieval: 1 dari 1")), "retrieval: langkah retrieval tercatat di trace");
+  r = await runAgent({ ...base(memoryStore(), urut(fin(FINAL), fin(dgBukti))), pencari, ambang: 0.3 });
+  ok(r.status === "selesai" && r.hasil?.status === "BERHASIL" && r.trace.some((t) => t.jenis === "guardrail" && t.ringkas.includes("bukti_sumber")), "retrieval: jawaban tanpa bukti padahal ada sumber diminta diperbaiki");
+  r = await runAgent(base(memoryStore(), urut(fin(FINAL))));
+  ok(r.hasil?.asumsi.some((a) => a.includes("Tidak ditemukan di manual")) === true, "retrieval: tanpa indeks, agent tetap jalan dan asumsi memuat catatan 'tidak ditemukan di manual'");
 
   // ---------- simpan_draf + persetujuan manusia ----------
   const fs1 = fileStore(path.join(tmp, "tugas"));
